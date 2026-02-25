@@ -166,3 +166,59 @@ contract BearDet is ReentrancyGuard, Ownable {
         if (newReporter == address(0)) revert BRD_ZeroAddress();
         address prev = brdReporter;
         brdReporter = newReporter;
+        emit ReporterSet(prev, newReporter);
+    }
+
+    function setDrawdownThresholdBps(uint256 newBps) external onlyGuardian {
+        if (newBps > BRD_MAX_DRAWDOWN_BPS) revert BRD_ThresholdInvalid();
+        uint256 prev = drawdownThresholdBps;
+        drawdownThresholdBps = newBps;
+        emit DrawdownThresholdSet(prev, newBps);
+    }
+
+    function updateIndicator(uint8 indicatorId, uint256 value) external onlyReporter whenNotHalted {
+        if (indicatorId >= BRD_MAX_INDICATORS) revert BRD_InvalidIndicatorId();
+        uint256 prev = latestIndicatorValue[indicatorId];
+        latestIndicatorValue[indicatorId] = value;
+        emit BearIndicatorUpdated(indicatorId, prev, value, block.number);
+    }
+
+    function recordDrawdown(uint256 drawdownBps, uint256 peakValue, uint256 currentValue) external onlyReporter whenNotHalted returns (uint256 snapshotId) {
+        if (drawdownBps > BRD_MAX_DRAWDOWN_BPS) revert BRD_DrawdownOutOfRange();
+        if (_snapshotIds.length >= BRD_MAX_SNAPSHOTS) revert BRD_MaxSnapshotsReached();
+
+        snapshotCounter++;
+        snapshotId = snapshotCounter;
+        snapshots[snapshotId] = DrawdownSnapshot({
+            reporter: msg.sender,
+            drawdownBps: drawdownBps,
+            peakValue: peakValue,
+            currentValue: currentValue,
+            atBlock: block.number
+        });
+        _snapshotIds.push(snapshotId);
+        emit DrawdownRecorded(snapshotId, msg.sender, drawdownBps, peakValue, currentValue, block.number);
+
+        if (drawdownBps >= drawdownThresholdBps && _signalIds.length < BRD_MAX_SIGNALS) {
+            signalCounter++;
+            uint256 sigId = signalCounter;
+            signals[sigId] = ExitSignal({
+                indicatorId: 0,
+                value: drawdownBps,
+                threshold: drawdownThresholdBps,
+                labelHash: keccak256("BearDet.drawdown"),
+                atBlock: block.number
+            });
+            _signalIds.push(sigId);
+            emit ExitSignalRaised(sigId, 0, drawdownBps, drawdownThresholdBps, keccak256("BearDet.drawdown"), block.number);
+        }
+        return snapshotId;
+    }
+
+    function raiseExitSignal(uint8 indicatorId, uint256 value, uint256 threshold, bytes32 labelHash) external onlyReporter whenNotHalted returns (uint256 signalId) {
+        if (indicatorId >= BRD_MAX_INDICATORS) revert BRD_InvalidIndicatorId();
+        if (value > BRD_BPS_DENOM * 100) revert BRD_IndicatorOutOfRange();
+        if (_signalIds.length >= BRD_MAX_SIGNALS) revert BRD_MaxSignalsReached();
+
+        signalCounter++;
+        signalId = signalCounter;
