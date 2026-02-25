@@ -278,3 +278,59 @@ contract BearDet is ReentrancyGuard, Ownable {
         ExitSignal storage s = signals[signalId];
         if (s.atBlock == 0) revert BRD_SnapshotNotFound();
         return (s.indicatorId, s.value, s.threshold, s.labelHash, s.atBlock);
+    }
+
+    function getAdvisory(uint256 advisoryId) external view returns (address author, uint8 severity, uint256 atBlock) {
+        ExitAdvisory storage a = advisories[advisoryId];
+        if (a.atBlock == 0) revert BRD_SnapshotNotFound();
+        return (a.author, a.severity, a.atBlock);
+    }
+
+    function snapshotCount() external view returns (uint256) {
+        return _snapshotIds.length;
+    }
+
+    function signalCount() external view returns (uint256) {
+        return _signalIds.length;
+    }
+
+    function advisoryCount() external view returns (uint256) {
+        return _advisoryIds.length;
+    }
+
+    function getSnapshotIdAt(uint256 index) external view returns (uint256) {
+        if (index >= _snapshotIds.length) revert BRD_ThresholdInvalid();
+        return _snapshotIds[index];
+    }
+
+    function getSignalIdAt(uint256 index) external view returns (uint256) {
+        if (index >= _signalIds.length) revert BRD_ThresholdInvalid();
+        return _signalIds[index];
+    }
+
+    function getAdvisoryIdAt(uint256 index) external view returns (uint256) {
+        if (index >= _advisoryIds.length) revert BRD_ThresholdInvalid();
+        return _advisoryIds[index];
+    }
+
+    function isExitSignalActive() external view returns (bool) {
+        if (_signalIds.length == 0) return false;
+        uint256 lastId = _signalIds[_signalIds.length - 1];
+        ExitSignal storage s = signals[lastId];
+        return s.value >= drawdownThresholdBps;
+    }
+
+    function recentSignals(uint256 limit) external view returns (uint256[] memory ids, uint256[] memory values, uint256[] memory blocks) {
+        uint256 n = _signalIds.length;
+        if (limit > n) limit = n;
+        if (limit == 0) return (new uint256[](0), new uint256[](0), new uint256[](0));
+        ids = new uint256[](limit);
+        values = new uint256[](limit);
+        blocks = new uint256[](limit);
+        for (uint256 i = 0; i < limit; i++) {
+            uint256 idx = n - 1 - i;
+            uint256 id = _signalIds[idx];
+            ids[i] = id;
+            values[i] = signals[id].value;
+            blocks[i] = signals[id].atBlock;
+        }
