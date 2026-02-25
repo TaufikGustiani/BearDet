@@ -222,3 +222,59 @@ contract BearDet is ReentrancyGuard, Ownable {
 
         signalCounter++;
         signalId = signalCounter;
+        signals[signalId] = ExitSignal({ indicatorId: indicatorId, value: value, threshold: threshold, labelHash: labelHash, atBlock: block.number });
+        _signalIds.push(signalId);
+        emit ExitSignalRaised(signalId, indicatorId, value, threshold, labelHash, block.number);
+        return signalId;
+    }
+
+    function postExitAdvisory(uint8 severity) external onlyReporter whenNotHalted returns (uint256 advisoryId) {
+        if (severity > BRD_MAX_SEVERITY) revert BRD_SeverityOutOfRange();
+        advisoryCounter++;
+        advisoryId = advisoryCounter;
+        advisories[advisoryId] = ExitAdvisory({ author: msg.sender, severity: severity, atBlock: block.number });
+        _advisoryIds.push(advisoryId);
+        emit ExitAdvisoryPosted(advisoryId, msg.sender, severity, block.number);
+        return advisoryId;
+    }
+
+    function recordDrawdownBatch(
+        uint256[] calldata drawdownBpsList,
+        uint256[] calldata peakValues,
+        uint256[] calldata currentValues
+    ) external onlyReporter whenNotHalted returns (uint256[] memory snapshotIds) {
+        uint256 n = drawdownBpsList.length;
+        if (n == 0 || n > BRD_BATCH_SIZE || peakValues.length != n || currentValues.length != n) revert BRD_ArrayLengthMismatch();
+        if (_snapshotIds.length + n > BRD_MAX_SNAPSHOTS) revert BRD_MaxSnapshotsReached();
+
+        snapshotIds = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            if (drawdownBpsList[i] > BRD_MAX_DRAWDOWN_BPS) revert BRD_DrawdownOutOfRange();
+            snapshotCounter++;
+            uint256 sid = snapshotCounter;
+            snapshots[sid] = DrawdownSnapshot({
+                reporter: msg.sender,
+                drawdownBps: drawdownBpsList[i],
+                peakValue: peakValues[i],
+                currentValue: currentValues[i],
+                atBlock: block.number
+            });
+            _snapshotIds.push(sid);
+            snapshotIds[i] = sid;
+            emit DrawdownRecorded(sid, msg.sender, drawdownBpsList[i], peakValues[i], currentValues[i], block.number);
+        }
+        emit SnapshotBatchRecorded(n, msg.sender, block.number);
+        return snapshotIds;
+    }
+
+    /// @notice Fetch a single drawdown snapshot by id.
+    function getSnapshot(uint256 snapshotId) external view returns (address reporter, uint256 drawdownBps, uint256 peakValue, uint256 currentValue, uint256 atBlock) {
+        DrawdownSnapshot storage s = snapshots[snapshotId];
+        if (s.atBlock == 0) revert BRD_SnapshotNotFound();
+        return (s.reporter, s.drawdownBps, s.peakValue, s.currentValue, s.atBlock);
+    }
+
+    function getSignal(uint256 signalId) external view returns (uint8 indicatorId, uint256 value, uint256 threshold, bytes32 labelHash, uint256 atBlock) {
+        ExitSignal storage s = signals[signalId];
+        if (s.atBlock == 0) revert BRD_SnapshotNotFound();
+        return (s.indicatorId, s.value, s.threshold, s.labelHash, s.atBlock);
