@@ -110,3 +110,59 @@ contract BearDet is ReentrancyGuard, Ownable {
         uint256 threshold;
         bytes32 labelHash;
         uint256 atBlock;
+    }
+
+    struct ExitAdvisory {
+        address author;
+        uint8 severity;
+        uint256 atBlock;
+    }
+
+    mapping(uint256 => DrawdownSnapshot) public snapshots;
+    mapping(uint256 => ExitSignal) public signals;
+    mapping(uint256 => ExitAdvisory) public advisories;
+    mapping(uint8 => uint256) public latestIndicatorValue;
+    uint256[] private _snapshotIds;
+    uint256[] private _signalIds;
+    uint256[] private _advisoryIds;
+
+    modifier whenNotHalted() {
+        if (brdHalted) revert BRD_Halted();
+        _;
+    }
+
+    modifier onlyGuardian() {
+        if (msg.sender != brdGuardian && msg.sender != owner()) revert BRD_NotGuardian();
+        _;
+    }
+
+    modifier onlyReporter() {
+        if (msg.sender != brdReporter && msg.sender != owner()) revert BRD_NotReporter();
+        _;
+    }
+
+    constructor() Ownable(msg.sender) {
+        brdTreasury = address(0x3c5e7a9b1d4f6a8c0e2a4b6c8d0e2f4a6b8c0d2e);
+        brdGuardian = address(0x6f2b4d8a0c2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a);
+        brdReporter = address(0x9a1c3e5b7d9f1a3b5c7d9e1f3a5b7c9d1e3f5a7b);
+        deployBlock = block.number;
+        chainDomain = keccak256(abi.encodePacked("BearDet.exit", block.chainid, deployBlock));
+        drawdownThresholdBps = 1500;
+    }
+
+    function setHalted(bool halted) external onlyOwner {
+        brdHalted = halted;
+        emit HaltToggled(halted);
+    }
+
+    function setGuardian(address newGuardian) external onlyOwner {
+        if (newGuardian == address(0)) revert BRD_ZeroAddress();
+        address prev = brdGuardian;
+        brdGuardian = newGuardian;
+        emit GuardianSet(prev, newGuardian);
+    }
+
+    function setReporter(address newReporter) external onlyOwner {
+        if (newReporter == address(0)) revert BRD_ZeroAddress();
+        address prev = brdReporter;
+        brdReporter = newReporter;
