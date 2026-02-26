@@ -446,3 +446,59 @@ contract BearDet is ReentrancyGuard, Ownable {
         }
         return sum / lastN;
     }
+
+    function maxDrawdownBps(uint256 lastN) external view returns (uint256 maxBps) {
+        uint256 n = _snapshotIds.length;
+        if (n == 0) return 0;
+        if (lastN > n) lastN = n;
+        for (uint256 i = n - lastN; i < n; i++) {
+            uint256 bps = snapshots[_snapshotIds[i]].drawdownBps;
+            if (bps > maxBps) maxBps = bps;
+        }
+        return maxBps;
+    }
+
+    function hasRecentExitSignal(uint256 withinBlocks) external view returns (bool) {
+        if (_signalIds.length == 0) return false;
+        uint256 lastId = _signalIds[_signalIds.length - 1];
+        ExitSignal storage s = signals[lastId];
+        return block.number - s.atBlock <= withinBlocks && s.value >= drawdownThresholdBps;
+    }
+
+    function getSnapshotRange(uint256 fromIndex, uint256 toIndex) external view returns (
+        uint256[] memory ids,
+        uint256[] memory drawdownBpsList,
+        uint256[] memory atBlocks
+    ) {
+        uint256 n = _snapshotIds.length;
+        if (fromIndex >= n) return (new uint256[](0), new uint256[](0), new uint256[](0));
+        if (toIndex >= n) toIndex = n - 1;
+        if (fromIndex > toIndex) return (new uint256[](0), new uint256[](0), new uint256[](0));
+        uint256 len = toIndex - fromIndex + 1;
+        ids = new uint256[](len);
+        drawdownBpsList = new uint256[](len);
+        atBlocks = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 id = _snapshotIds[fromIndex + i];
+            ids[i] = id;
+            drawdownBpsList[i] = snapshots[id].drawdownBps;
+            atBlocks[i] = snapshots[id].atBlock;
+        }
+        return (ids, drawdownBpsList, atBlocks);
+    }
+
+    function getSignalRange(uint256 fromIndex, uint256 toIndex) external view returns (
+        uint256[] memory ids,
+        uint8[] memory indicatorIds,
+        uint256[] memory values,
+        uint256[] memory atBlocks
+    ) {
+        uint256 n = _signalIds.length;
+        if (fromIndex >= n) return (new uint256[](0), new uint8[](0), new uint256[](0), new uint256[](0));
+        if (toIndex >= n) toIndex = n - 1;
+        if (fromIndex > toIndex) return (new uint256[](0), new uint8[](0), new uint256[](0), new uint256[](0));
+        uint256 len = toIndex - fromIndex + 1;
+        ids = new uint256[](len);
+        indicatorIds = new uint8[](len);
+        values = new uint256[](len);
+        atBlocks = new uint256[](len);
