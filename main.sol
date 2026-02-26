@@ -726,3 +726,59 @@ contract BearDet is ReentrancyGuard, Ownable {
 
     function timeSinceLastDrawdown() external view returns (uint256 blocksAgo) {
         if (_snapshotIds.length == 0) return type(uint256).max;
+        uint256 lastBlock = snapshots[_snapshotIds[_snapshotIds.length - 1]].atBlock;
+        if (block.number < lastBlock) return 0;
+        return block.number - lastBlock;
+    }
+
+    function treasuryInfo() external view returns (uint256 balance, address recipient) {
+        return (treasuryBalance, brdTreasury);
+    }
+
+    function domainSalt() external view returns (bytes32) {
+        return chainDomain;
+    }
+
+    // -------------------------------------------------------------------------
+    // BULK FETCH — for dashboards that need many records in one call
+    // -------------------------------------------------------------------------
+
+    function getSnapshotsBulk(uint256[] calldata snapshotIds) external view returns (
+        address[] memory reporters,
+        uint256[] memory drawdownBpsList,
+        uint256[] memory peakValues,
+        uint256[] memory currentValues,
+        uint256[] memory atBlocks
+    ) {
+        uint256 n = snapshotIds.length;
+        if (n > BRD_BATCH_SIZE) revert BRD_BatchTooLarge();
+        reporters = new address[](n);
+        drawdownBpsList = new uint256[](n);
+        peakValues = new uint256[](n);
+        currentValues = new uint256[](n);
+        atBlocks = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            DrawdownSnapshot storage s = snapshots[snapshotIds[i]];
+            if (s.atBlock == 0) revert BRD_SnapshotNotFound();
+            reporters[i] = s.reporter;
+            drawdownBpsList[i] = s.drawdownBps;
+            peakValues[i] = s.peakValue;
+            currentValues[i] = s.currentValue;
+            atBlocks[i] = s.atBlock;
+        }
+        return (reporters, drawdownBpsList, peakValues, currentValues, atBlocks);
+    }
+
+    function getSignalsBulk(uint256[] calldata signalIds) external view returns (
+        uint8[] memory indicatorIds,
+        uint256[] memory values,
+        uint256[] memory thresholds,
+        bytes32[] memory labelHashes,
+        uint256[] memory atBlocks
+    ) {
+        uint256 n = signalIds.length;
+        if (n > BRD_BATCH_SIZE) revert BRD_BatchTooLarge();
+        indicatorIds = new uint8[](n);
+        values = new uint256[](n);
+        thresholds = new uint256[](n);
+        labelHashes = new bytes32[](n);
