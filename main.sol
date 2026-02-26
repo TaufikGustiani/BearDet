@@ -894,3 +894,59 @@ contract BearDet is ReentrancyGuard, Ownable {
     }
 
     function breachedIndicators() external view returns (uint8[] memory ids) {
+        uint256 count = 0;
+        for (uint8 i = 0; i < BRD_MAX_INDICATORS; i++) {
+            if (indicatorThreshold[i] > 0 && latestIndicatorValue[i] >= indicatorThreshold[i]) count++;
+        }
+        ids = new uint8[](count);
+        uint256 j = 0;
+        for (uint8 i = 0; i < BRD_MAX_INDICATORS; i++) {
+            if (indicatorThreshold[i] > 0 && latestIndicatorValue[i] >= indicatorThreshold[i]) {
+                ids[j] = i;
+                j++;
+            }
+        }
+        return ids;
+    }
+
+    function exitPressureScore() external view returns (uint256 scoreBps) {
+        uint256 n = _snapshotIds.length;
+        if (n == 0) return 0;
+        uint256 latestBps = snapshots[_snapshotIds[n - 1]].drawdownBps;
+        uint256 advCount = _advisoryIds.length;
+        uint256 highSev = 0;
+        for (uint256 i = 0; i < advCount; i++) {
+            if (advisories[_advisoryIds[i]].severity >= 4) highSev++;
+        }
+        scoreBps = latestBps;
+        if (highSev > 0 && scoreBps < BRD_BPS_DENOM) scoreBps += (highSev * 500);
+        if (scoreBps > BRD_BPS_DENOM) scoreBps = BRD_BPS_DENOM;
+        return scoreBps;
+    }
+
+    function getSnapshotIdsPaginated(uint256 offset, uint256 limit) external view returns (uint256[] memory ids) {
+        uint256 total = _snapshotIds.length;
+        if (offset >= total) return new uint256[](0);
+        if (limit > total - offset) limit = total - offset;
+        ids = new uint256[](limit);
+        for (uint256 i = 0; i < limit; i++) {
+            ids[i] = _snapshotIds[offset + i];
+        }
+        return ids;
+    }
+
+    function getSignalIdsPaginated(uint256 offset, uint256 limit) external view returns (uint256[] memory ids) {
+        uint256 total = _signalIds.length;
+        if (offset >= total) return new uint256[](0);
+        if (limit > total - offset) limit = total - offset;
+        ids = new uint256[](limit);
+        for (uint256 i = 0; i < limit; i++) {
+            ids[i] = _signalIds[offset + i];
+        }
+        return ids;
+    }
+
+    function getAdvisoryIdsPaginated(uint256 offset, uint256 limit) external view returns (uint256[] memory ids) {
+        uint256 total = _advisoryIds.length;
+        if (offset >= total) return new uint256[](0);
+        if (limit > total - offset) limit = total - offset;
