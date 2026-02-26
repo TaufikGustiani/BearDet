@@ -502,3 +502,59 @@ contract BearDet is ReentrancyGuard, Ownable {
         indicatorIds = new uint8[](len);
         values = new uint256[](len);
         atBlocks = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 id = _signalIds[fromIndex + i];
+            ids[i] = id;
+            indicatorIds[i] = signals[id].indicatorId;
+            values[i] = signals[id].value;
+            atBlocks[i] = signals[id].atBlock;
+        }
+        return (ids, indicatorIds, values, atBlocks);
+    }
+
+    function getAdvisoryRange(uint256 fromIndex, uint256 toIndex) external view returns (
+        uint256[] memory ids,
+        address[] memory authors,
+        uint8[] memory severities,
+        uint256[] memory atBlocks
+    ) {
+        uint256 n = _advisoryIds.length;
+        if (fromIndex >= n) return (new uint256[](0), new address[](0), new uint8[](0), new uint256[](0));
+        if (toIndex >= n) toIndex = n - 1;
+        if (fromIndex > toIndex) return (new uint256[](0), new address[](0), new uint8[](0), new uint256[](0));
+        uint256 len = toIndex - fromIndex + 1;
+        ids = new uint256[](len);
+        authors = new address[](len);
+        severities = new uint8[](len);
+        atBlocks = new uint256[](len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 id = _advisoryIds[fromIndex + i];
+            ids[i] = id;
+            authors[i] = advisories[id].author;
+            severities[i] = advisories[id].severity;
+            atBlocks[i] = advisories[id].atBlock;
+        }
+        return (ids, authors, severities, atBlocks);
+    }
+
+    function exitRiskScore(uint256 lastNSnapshots) external view returns (uint256 scoreBps) {
+        uint256 n = _snapshotIds.length;
+        if (n == 0 || lastNSnapshots == 0) return 0;
+        if (lastNSnapshots > n) lastNSnapshots = n;
+        uint256 sum = 0;
+        for (uint256 i = n - lastNSnapshots; i < n; i++) {
+            sum += snapshots[_snapshotIds[i]].drawdownBps;
+        }
+        scoreBps = sum / lastNSnapshots;
+        if (scoreBps > BRD_BPS_DENOM) scoreBps = BRD_BPS_DENOM;
+        return scoreBps;
+    }
+
+    function recommendedAction() external view returns (uint8 action, uint256 confidenceBps) {
+        if (_snapshotIds.length == 0) return (0, 0);
+        uint256 latestBps = snapshots[_snapshotIds[_snapshotIds.length - 1]].drawdownBps;
+        if (latestBps >= drawdownThresholdBps) {
+            action = 2;
+            confidenceBps = latestBps > drawdownThresholdBps * 2 ? BRD_BPS_DENOM : (latestBps * BRD_BPS_DENOM) / drawdownThresholdBps;
+            if (confidenceBps > BRD_BPS_DENOM) confidenceBps = BRD_BPS_DENOM;
+        } else {
