@@ -334,3 +334,59 @@ contract BearDet is ReentrancyGuard, Ownable {
             values[i] = signals[id].value;
             blocks[i] = signals[id].atBlock;
         }
+        return (ids, values, blocks);
+    }
+
+    function recentDrawdowns(uint256 limit) external view returns (uint256[] memory ids, uint256[] memory bpsList, uint256[] memory blocks) {
+        uint256 n = _snapshotIds.length;
+        if (limit > n) limit = n;
+        if (limit == 0) return (new uint256[](0), new uint256[](0), new uint256[](0));
+        ids = new uint256[](limit);
+        bpsList = new uint256[](limit);
+        blocks = new uint256[](limit);
+        for (uint256 i = 0; i < limit; i++) {
+            uint256 idx = n - 1 - i;
+            uint256 id = _snapshotIds[idx];
+            ids[i] = id;
+            bpsList[i] = snapshots[id].drawdownBps;
+            blocks[i] = snapshots[id].atBlock;
+        }
+        return (ids, bpsList, blocks);
+    }
+
+    receive() external payable {
+        if (msg.value > 0) {
+            treasuryBalance += msg.value;
+            emit FeeCollected(msg.sender, msg.value);
+        }
+    }
+
+    function withdrawTreasury(address to, uint256 amountWei) external onlyOwner nonReentrant {
+        if (to == address(0)) revert BRD_ZeroAddress();
+        if (amountWei == 0) revert BRD_WithdrawZero();
+        if (amountWei > treasuryBalance) revert BRD_TransferFailed();
+        treasuryBalance -= amountWei;
+        (bool ok,) = to.call{value: amountWei}("");
+        if (!ok) revert BRD_TransferFailed();
+        emit TreasuryWithdrawn(to, amountWei);
+    }
+
+    // -------------------------------------------------------------------------
+    // VIEW HELPERS — dashboard aggregates
+    // -------------------------------------------------------------------------
+
+    function getDrawdownStats() external view returns (
+        uint256 totalSnapshots,
+        uint256 totalSignals,
+        uint256 totalAdvisories,
+        uint256 currentThresholdBps,
+        uint256 latestDrawdownBps
+    ) {
+        totalSnapshots = _snapshotIds.length;
+        totalSignals = _signalIds.length;
+        totalAdvisories = _advisoryIds.length;
+        currentThresholdBps = drawdownThresholdBps;
+        if (totalSnapshots > 0) {
+            latestDrawdownBps = snapshots[_snapshotIds[totalSnapshots - 1]].drawdownBps;
+        }
+        return (totalSnapshots, totalSignals, totalAdvisories, currentThresholdBps, latestDrawdownBps);
