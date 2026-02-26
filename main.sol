@@ -670,3 +670,59 @@ contract BearDet is ReentrancyGuard, Ownable {
         if (n < 2 || lastN < 2) return 0;
         if (lastN > n) lastN = n;
         uint256 firstBps = snapshots[_snapshotIds[n - lastN]].drawdownBps;
+        uint256 lastBps = snapshots[_snapshotIds[n - 1]].drawdownBps;
+        if (lastBps >= firstBps) return int256(lastBps - firstBps);
+        return -int256(firstBps - lastBps);
+    }
+
+    function severityDistribution() external view returns (uint256[] memory counts) {
+        counts = new uint256[](BRD_MAX_SEVERITY + 1);
+        for (uint256 i = 0; i < _advisoryIds.length; i++) {
+            uint8 sev = advisories[_advisoryIds[i]].severity;
+            if (sev <= BRD_MAX_SEVERITY) counts[sev]++;
+        }
+        return counts;
+    }
+
+    function indicatorSummary() external view returns (
+        uint8[] memory ids,
+        uint256[] memory values,
+        uint256[] memory thresholds
+    ) {
+        ids = new uint8[](BRD_MAX_INDICATORS);
+        values = new uint256[](BRD_MAX_INDICATORS);
+        thresholds = new uint256[](BRD_MAX_INDICATORS);
+        for (uint8 i = 0; i < BRD_MAX_INDICATORS; i++) {
+            ids[i] = i;
+            values[i] = latestIndicatorValue[i];
+            thresholds[i] = indicatorThreshold[i];
+        }
+        return (ids, values, thresholds);
+    }
+
+    function countIndicatorsAboveThreshold() external view returns (uint256 count) {
+        for (uint8 i = 0; i < BRD_MAX_INDICATORS; i++) {
+            if (indicatorThreshold[i] > 0 && latestIndicatorValue[i] >= indicatorThreshold[i]) count++;
+        }
+        return count;
+    }
+
+    function exitReadinessBps() external view returns (uint256 bps) {
+        uint256 n = _snapshotIds.length;
+        if (n == 0) return 0;
+        uint256 latestBps = snapshots[_snapshotIds[n - 1]].drawdownBps;
+        if (drawdownThresholdBps == 0) return 0;
+        bps = (latestBps * BRD_BPS_DENOM) / drawdownThresholdBps;
+        if (bps > BRD_BPS_DENOM) bps = BRD_BPS_DENOM;
+        return bps;
+    }
+
+    function timeSinceLastSignal() external view returns (uint256 blocksAgo) {
+        if (_signalIds.length == 0) return type(uint256).max;
+        uint256 lastBlock = signals[_signalIds[_signalIds.length - 1]].atBlock;
+        if (block.number < lastBlock) return 0;
+        return block.number - lastBlock;
+    }
+
+    function timeSinceLastDrawdown() external view returns (uint256 blocksAgo) {
+        if (_snapshotIds.length == 0) return type(uint256).max;
