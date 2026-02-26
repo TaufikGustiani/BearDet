@@ -390,3 +390,59 @@ contract BearDet is ReentrancyGuard, Ownable {
             latestDrawdownBps = snapshots[_snapshotIds[totalSnapshots - 1]].drawdownBps;
         }
         return (totalSnapshots, totalSignals, totalAdvisories, currentThresholdBps, latestDrawdownBps);
+    }
+
+    function getIndicatorSnapshot() external view returns (uint256[] memory values) {
+        values = new uint256[](BRD_MAX_INDICATORS);
+        for (uint8 i = 0; i < BRD_MAX_INDICATORS; i++) {
+            values[i] = latestIndicatorValue[i];
+        }
+        return values;
+    }
+
+    function getLatestAdvisory() external view returns (uint256 id, address author, uint8 severity, uint256 atBlock) {
+        if (_advisoryIds.length == 0) revert BRD_SnapshotNotFound();
+        id = _advisoryIds[_advisoryIds.length - 1];
+        ExitAdvisory storage a = advisories[id];
+        return (id, a.author, a.severity, a.atBlock);
+    }
+
+    function getLatestSignal() external view returns (uint256 id, uint8 indicatorId, uint256 value, uint256 threshold, uint256 atBlock) {
+        if (_signalIds.length == 0) revert BRD_SnapshotNotFound();
+        id = _signalIds[_signalIds.length - 1];
+        ExitSignal storage s = signals[id];
+        return (id, s.indicatorId, s.value, s.threshold, s.atBlock);
+    }
+
+    function getLatestDrawdown() external view returns (uint256 id, uint256 drawdownBps, uint256 peakValue, uint256 currentValue, uint256 atBlock) {
+        if (_snapshotIds.length == 0) revert BRD_SnapshotNotFound();
+        id = _snapshotIds[_snapshotIds.length - 1];
+        DrawdownSnapshot storage s = snapshots[id];
+        return (id, s.drawdownBps, s.peakValue, s.currentValue, s.atBlock);
+    }
+
+    function countSignalsAboveThreshold() external view returns (uint256 count) {
+        for (uint256 i = 0; i < _signalIds.length; i++) {
+            if (signals[_signalIds[i]].value >= drawdownThresholdBps) count++;
+        }
+        return count;
+    }
+
+    function countAdvisoriesBySeverity(uint8 severity) external view returns (uint256 count) {
+        if (severity > BRD_MAX_SEVERITY) return 0;
+        for (uint256 i = 0; i < _advisoryIds.length; i++) {
+            if (advisories[_advisoryIds[i]].severity == severity) count++;
+        }
+        return count;
+    }
+
+    function averageDrawdownBps(uint256 lastN) external view returns (uint256 avgBps) {
+        uint256 n = _snapshotIds.length;
+        if (n == 0 || lastN == 0) return 0;
+        if (lastN > n) lastN = n;
+        uint256 sum = 0;
+        for (uint256 i = n - lastN; i < n; i++) {
+            sum += snapshots[_snapshotIds[i]].drawdownBps;
+        }
+        return sum / lastN;
+    }
