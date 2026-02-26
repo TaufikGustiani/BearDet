@@ -782,3 +782,59 @@ contract BearDet is ReentrancyGuard, Ownable {
         values = new uint256[](n);
         thresholds = new uint256[](n);
         labelHashes = new bytes32[](n);
+        atBlocks = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            ExitSignal storage s = signals[signalIds[i]];
+            if (s.atBlock == 0) revert BRD_SignalNotFound();
+            indicatorIds[i] = s.indicatorId;
+            values[i] = s.value;
+            thresholds[i] = s.threshold;
+            labelHashes[i] = s.labelHash;
+            atBlocks[i] = s.atBlock;
+        }
+        return (indicatorIds, values, thresholds, labelHashes, atBlocks);
+    }
+
+    function getAdvisoriesBulk(uint256[] calldata advisoryIds) external view returns (
+        address[] memory authors,
+        uint8[] memory severities,
+        uint256[] memory atBlocks
+    ) {
+        uint256 n = advisoryIds.length;
+        if (n > BRD_BATCH_SIZE) revert BRD_BatchTooLarge();
+        authors = new address[](n);
+        severities = new uint8[](n);
+        atBlocks = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            ExitAdvisory storage a = advisories[advisoryIds[i]];
+            if (a.atBlock == 0) revert BRD_AdvisoryNotFound();
+            authors[i] = a.author;
+            severities[i] = a.severity;
+            atBlocks[i] = a.atBlock;
+        }
+        return (authors, severities, atBlocks);
+    }
+
+    /// @notice Dashboard summary: snapshot count, signal count, advisory count, latest drawdown bps, and whether exit is recommended.
+    function dashboardSummary() external view returns (
+        uint256 totalSnapshots,
+        uint256 totalSignals,
+        uint256 totalAdvisories,
+        uint256 latestDrawdownBps,
+        uint256 thresholdBps,
+        bool exitRecommended,
+        uint256 treasuryBal
+    ) {
+        totalSnapshots = _snapshotIds.length;
+        totalSignals = _signalIds.length;
+        totalAdvisories = _advisoryIds.length;
+        thresholdBps = drawdownThresholdBps;
+        treasuryBal = treasuryBalance;
+        if (totalSnapshots > 0) {
+            latestDrawdownBps = snapshots[_snapshotIds[totalSnapshots - 1]].drawdownBps;
+            exitRecommended = latestDrawdownBps >= drawdownThresholdBps;
+        }
+        return (totalSnapshots, totalSignals, totalAdvisories, latestDrawdownBps, thresholdBps, exitRecommended, treasuryBal);
+    }
+
+    /// @notice Returns the last N drawdown values (bps) for charting.
