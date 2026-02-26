@@ -1062,3 +1062,40 @@ contract BearDet is ReentrancyGuard, Ownable {
         uint256 sum = 0;
         for (uint256 i = n - lastN; i < n; i++) {
             sum += snapshots[_snapshotIds[i]].drawdownBps;
+        }
+        return sum / lastN;
+    }
+
+    function _maxDrawdownBpsInternal(uint256 lastN) internal view returns (uint256 maxBps) {
+        uint256 n = _snapshotIds.length;
+        if (n == 0) return 0;
+        if (lastN > n) lastN = n;
+        for (uint256 i = n - lastN; i < n; i++) {
+            uint256 bps = snapshots[_snapshotIds[i]].drawdownBps;
+            if (bps > maxBps) maxBps = bps;
+        }
+        return maxBps;
+    }
+
+    function supportsInterface(bytes4) external pure returns (bool) {
+        return false;
+    }
+
+    function version() external pure returns (string memory) {
+        return "BearDet.1.0.0";
+    }
+
+    function constantsForFrontend() external pure returns (
+        uint256 bpsDenom,
+        uint256 maxIndicators,
+        uint256 maxSeverity,
+        uint256 maxDrawdownBps,
+        uint256 maxSnapshots,
+        uint256 maxSignals,
+        uint256 batchSize
+    ) {
+        return (BRD_BPS_DENOM, BRD_MAX_INDICATORS, BRD_MAX_SEVERITY, BRD_MAX_DRAWDOWN_BPS, BRD_MAX_SNAPSHOTS, BRD_MAX_SIGNALS, BRD_BATCH_SIZE);
+    }
+}
+
+
