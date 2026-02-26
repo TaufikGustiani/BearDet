@@ -1006,3 +1006,59 @@ contract BearDet is ReentrancyGuard, Ownable {
     }
 
     function totalTreasuryReceived() external view returns (uint256) {
+        return treasuryBalance;
+    }
+
+    function isHalted() external view returns (bool) {
+        return brdHalted;
+    }
+
+    function getGuardian() external view returns (address) {
+        return brdGuardian;
+    }
+
+    function getReporter() external view returns (address) {
+        return brdReporter;
+    }
+
+    function getDrawdownThresholdBps() external view returns (uint256) {
+        return drawdownThresholdBps;
+    }
+
+    /// @notice For dashboards: returns a single struct-like payload with the most used metrics.
+    function getDashboardPayload() external view returns (
+        uint256 snapCount,
+        uint256 sigCount,
+        uint256 advCount,
+        uint256 latestBps,
+        uint256 threshBps,
+        bool exitFlag,
+        uint256 avgBps10,
+        uint256 maxBps10,
+        uint256 exitReadiness
+    ) {
+        snapCount = _snapshotIds.length;
+        sigCount = _signalIds.length;
+        advCount = _advisoryIds.length;
+        threshBps = drawdownThresholdBps;
+        if (snapCount > 0) {
+            latestBps = snapshots[_snapshotIds[snapCount - 1]].drawdownBps;
+            exitFlag = latestBps >= threshBps;
+            uint256 n10 = snapCount > 10 ? 10 : snapCount;
+            avgBps10 = _averageDrawdownBpsInternal(n10);
+            maxBps10 = _maxDrawdownBpsInternal(n10);
+        }
+        if (threshBps > 0 && snapCount > 0) {
+            exitReadiness = (latestBps * BRD_BPS_DENOM) / threshBps;
+            if (exitReadiness > BRD_BPS_DENOM) exitReadiness = BRD_BPS_DENOM;
+        }
+        return (snapCount, sigCount, advCount, latestBps, threshBps, exitFlag, avgBps10, maxBps10, exitReadiness);
+    }
+
+    function _averageDrawdownBpsInternal(uint256 lastN) internal view returns (uint256 avgBps) {
+        uint256 n = _snapshotIds.length;
+        if (n == 0 || lastN == 0) return 0;
+        if (lastN > n) lastN = n;
+        uint256 sum = 0;
+        for (uint256 i = n - lastN; i < n; i++) {
+            sum += snapshots[_snapshotIds[i]].drawdownBps;
