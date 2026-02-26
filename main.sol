@@ -558,3 +558,59 @@ contract BearDet is ReentrancyGuard, Ownable {
             confidenceBps = latestBps > drawdownThresholdBps * 2 ? BRD_BPS_DENOM : (latestBps * BRD_BPS_DENOM) / drawdownThresholdBps;
             if (confidenceBps > BRD_BPS_DENOM) confidenceBps = BRD_BPS_DENOM;
         } else {
+            action = 1;
+            confidenceBps = (latestBps * BRD_BPS_DENOM) / drawdownThresholdBps;
+        }
+        return (action, confidenceBps);
+    }
+
+    function getConfig() external view returns (
+        address guardian,
+        address reporter,
+        address treasury,
+        uint256 thresholdBps,
+        bool halted,
+        uint256 deployBlockNum
+    ) {
+        return (brdGuardian, brdReporter, brdTreasury, drawdownThresholdBps, brdHalted, deployBlock);
+    }
+
+    function setReporterFeeWei(uint256 newFeeWei) external onlyOwner {
+        uint256 prev = reporterFeeWei;
+        reporterFeeWei = newFeeWei;
+        emit ReporterFeeSet(prev, newFeeWei);
+    }
+
+    function setIndicatorThreshold(uint8 indicatorId, uint256 threshold) external onlyGuardian {
+        if (indicatorId >= BRD_MAX_INDICATORS) revert BRD_InvalidIndicatorId();
+        indicatorThreshold[indicatorId] = threshold;
+        emit IndicatorThresholdSet(indicatorId, threshold);
+    }
+
+    function submitDrawdownWithFee(uint256 drawdownBps, uint256 peakValue, uint256 currentValue) external payable onlyReporter whenNotHalted returns (uint256 snapshotId) {
+        if (msg.value < reporterFeeWei) revert BRD_ZeroAmount();
+        if (msg.value > 0) {
+            treasuryBalance += msg.value;
+            emit FeeCollected(msg.sender, msg.value);
+        }
+        return recordDrawdown(drawdownBps, peakValue, currentValue);
+    }
+
+    function getSnapshotDetails(uint256 snapshotId) external view returns (
+        address reporter,
+        uint256 drawdownBps,
+        uint256 peakValue,
+        uint256 currentValue,
+        uint256 atBlock,
+        bool aboveThreshold
+    ) {
+        DrawdownSnapshot storage s = snapshots[snapshotId];
+        if (s.atBlock == 0) revert BRD_SnapshotNotFound();
+        return (s.reporter, s.drawdownBps, s.peakValue, s.currentValue, s.atBlock, s.drawdownBps >= drawdownThresholdBps);
+    }
+
+    function getSignalDetails(uint256 signalId) external view returns (
+        uint8 indicatorId,
+        uint256 value,
+        uint256 threshold,
+        bytes32 labelHash,
