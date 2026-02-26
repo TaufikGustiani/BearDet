@@ -950,3 +950,59 @@ contract BearDet is ReentrancyGuard, Ownable {
         uint256 total = _advisoryIds.length;
         if (offset >= total) return new uint256[](0);
         if (limit > total - offset) limit = total - offset;
+        ids = new uint256[](limit);
+        for (uint256 i = 0; i < limit; i++) {
+            ids[i] = _advisoryIds[offset + i];
+        }
+        return ids;
+    }
+
+    function medianDrawdownBps(uint256 lastN) external view returns (uint256 medianBps) {
+        uint256 n = _snapshotIds.length;
+        if (n == 0 || lastN == 0) return 0;
+        if (lastN > n) lastN = n;
+        uint256[] memory bpsList = new uint256[](lastN);
+        for (uint256 i = 0; i < lastN; i++) {
+            bpsList[i] = snapshots[_snapshotIds[n - 1 - i]].drawdownBps;
+        }
+        for (uint256 i = 0; i < lastN - 1; i++) {
+            for (uint256 j = i + 1; j < lastN; j++) {
+                if (bpsList[i] > bpsList[j]) {
+                    (bpsList[i], bpsList[j]) = (bpsList[j], bpsList[i]);
+                }
+            }
+        }
+        if (lastN % 2 == 0) {
+            medianBps = (bpsList[lastN / 2 - 1] + bpsList[lastN / 2]) / 2;
+        } else {
+            medianBps = bpsList[lastN / 2];
+        }
+        return medianBps;
+    }
+
+    function minDrawdownBps(uint256 lastN) external view returns (uint256 minBps) {
+        uint256 n = _snapshotIds.length;
+        if (n == 0) return 0;
+        if (lastN > n) lastN = n;
+        minBps = type(uint256).max;
+        for (uint256 i = n - lastN; i < n; i++) {
+            uint256 bps = snapshots[_snapshotIds[i]].drawdownBps;
+            if (bps < minBps) minBps = bps;
+        }
+        if (minBps == type(uint256).max) minBps = 0;
+        return minBps;
+    }
+
+    function maxDrawdownInRange(uint256 fromIndex, uint256 toIndex) external view returns (uint256 maxBps) {
+        uint256 n = _snapshotIds.length;
+        if (n == 0 || fromIndex >= n) return 0;
+        if (toIndex >= n) toIndex = n - 1;
+        if (fromIndex > toIndex) return 0;
+        for (uint256 i = fromIndex; i <= toIndex; i++) {
+            uint256 bps = snapshots[_snapshotIds[i]].drawdownBps;
+            if (bps > maxBps) maxBps = bps;
+        }
+        return maxBps;
+    }
+
+    function totalTreasuryReceived() external view returns (uint256) {
