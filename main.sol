@@ -614,3 +614,59 @@ contract BearDet is ReentrancyGuard, Ownable {
         uint256 value,
         uint256 threshold,
         bytes32 labelHash,
+        uint256 atBlock,
+        bool isActive
+    ) {
+        ExitSignal storage s = signals[signalId];
+        if (s.atBlock == 0) revert BRD_SignalNotFound();
+        return (s.indicatorId, s.value, s.threshold, s.labelHash, s.atBlock, s.value >= drawdownThresholdBps);
+    }
+
+    function getAdvisoryDetails(uint256 advisoryId) external view returns (
+        address author,
+        uint8 severity,
+        uint256 atBlock
+    ) {
+        ExitAdvisory storage a = advisories[advisoryId];
+        if (a.atBlock == 0) revert BRD_AdvisoryNotFound();
+        return (a.author, a.severity, a.atBlock);
+    }
+
+    function getLastNSnapshotIds(uint256 n) external view returns (uint256[] memory ids) {
+        uint256 total = _snapshotIds.length;
+        if (total == 0) return new uint256[](0);
+        if (n > total) n = total;
+        ids = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            ids[i] = _snapshotIds[total - 1 - i];
+        }
+        return ids;
+    }
+
+    function getLastNSignalIds(uint256 n) external view returns (uint256[] memory ids) {
+        uint256 total = _signalIds.length;
+        if (total == 0) return new uint256[](0);
+        if (n > total) n = total;
+        ids = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            ids[i] = _signalIds[total - 1 - i];
+        }
+        return ids;
+    }
+
+    function getLastNAdvisoryIds(uint256 n) external view returns (uint256[] memory ids) {
+        uint256 total = _advisoryIds.length;
+        if (total == 0) return new uint256[](0);
+        if (n > total) n = total;
+        ids = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            ids[i] = _advisoryIds[total - 1 - i];
+        }
+        return ids;
+    }
+
+    function drawdownTrend(uint256 lastN) external view returns (int256 trendBps) {
+        uint256 n = _snapshotIds.length;
+        if (n < 2 || lastN < 2) return 0;
+        if (lastN > n) lastN = n;
+        uint256 firstBps = snapshots[_snapshotIds[n - lastN]].drawdownBps;
