@@ -838,3 +838,59 @@ contract BearDet is ReentrancyGuard, Ownable {
     }
 
     /// @notice Returns the last N drawdown values (bps) for charting.
+    function getDrawdownSeries(uint256 n) external view returns (uint256[] memory bpsSeries) {
+        uint256 total = _snapshotIds.length;
+        if (total == 0) return new uint256[](0);
+        if (n > total) n = total;
+        bpsSeries = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            bpsSeries[i] = snapshots[_snapshotIds[total - 1 - i]].drawdownBps;
+        }
+        return bpsSeries;
+    }
+
+    /// @notice Returns the last N signal values for charting.
+    function getSignalValueSeries(uint256 n) external view returns (uint256[] memory valueSeries) {
+        uint256 total = _signalIds.length;
+        if (total == 0) return new uint256[](0);
+        if (n > total) n = total;
+        valueSeries = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            valueSeries[i] = signals[_signalIds[total - 1 - i]].value;
+        }
+        return valueSeries;
+    }
+
+    /// @notice Compute a simple moving average of drawdown (bps) over the last N snapshots.
+    function drawdownMovingAverageBps(uint256 lastN) external view returns (uint256 avgBps) {
+        return averageDrawdownBps(lastN);
+    }
+
+    /// @notice Check if the system is currently in "exit recommended" state based on latest snapshot.
+    function shouldExit() external view returns (bool) {
+        if (_snapshotIds.length == 0) return false;
+        return snapshots[_snapshotIds[_snapshotIds.length - 1]].drawdownBps >= drawdownThresholdBps;
+    }
+
+    /// @notice Get deploy info for frontends.
+    function deployInfo() external view returns (uint256 blockNum, bytes32 domain) {
+        return (deployBlock, chainDomain);
+    }
+
+    // -------------------------------------------------------------------------
+    // ADDITIONAL VIEWS — indicator and exit metrics
+    // -------------------------------------------------------------------------
+
+    function getIndicatorAt(uint8 indicatorId) external view returns (uint256 value, uint256 threshold) {
+        if (indicatorId >= BRD_MAX_INDICATORS) revert BRD_InvalidIndicatorId();
+        return (latestIndicatorValue[indicatorId], indicatorThreshold[indicatorId]);
+    }
+
+    function isIndicatorBreached(uint8 indicatorId) external view returns (bool) {
+        if (indicatorId >= BRD_MAX_INDICATORS) return false;
+        uint256 th = indicatorThreshold[indicatorId];
+        if (th == 0) return false;
+        return latestIndicatorValue[indicatorId] >= th;
+    }
+
+    function breachedIndicators() external view returns (uint8[] memory ids) {
